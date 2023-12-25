@@ -210,11 +210,9 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
 bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
     std::string fileName = path.filename().string();
 
-    // 使用正则表达式匹配时间前缀
     std::regex prefixRegex(pattern);
     std::smatch match;
     if (std::regex_search(fileName, match, prefixRegex)) {
-        // 提取时间前缀
 //        std::string timePrefix = match.str();
 //
 //        std::time_t now = std::time(nullptr);

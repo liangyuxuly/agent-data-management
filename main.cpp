@@ -1,12 +1,15 @@
-#include <iostream>
 #include "directory_copy.h"
-#include <chrono>
+#include "constants.h"
 
 int main() {
     fs::path dstDir = "/home/ecopia/data/mapping";
     fs::path srcDir = "/home/ecopia/external_data/mapping";
-    DirectoryCopy dc(srcDir, dstDir, 2);
-    dc.copyDirectory();
+    int maxThread = 2;
+    DirectoryCopy dc(srcDir, dstDir, maxThread);
+    int ret = dc.copyDirectory();
+    if (ret != SUCCESS) {
+        std::cout << "copyDirectory failed" << std::endl;
+    }
 //    auto start = std::chrono::high_resolution_clock::now();
 //    auto size = dc.getUsedSpace("/data/alpaca-backend-cgi");
 //    auto end = std::chrono::high_resolution_clock::now();
