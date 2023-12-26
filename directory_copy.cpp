@@ -3,9 +3,10 @@
 #include "thread_pool.h"
 #include <iostream>
 #include <cstdio>
+#include <nlohmann/json.hpp>
 
 DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread = 5)
-        : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dir_pattern("^\\d{4}_\\d{2}_\\d{2}") {}
+        : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {}
 
 DirectoryCopy::~DirectoryCopy() {}
 
@@ -27,23 +28,41 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
     if (fs::is_directory(path)) {
         for (const auto &entry: fs::directory_iterator(path)) {
             if (fs::is_directory(entry)) {
-                if (hasPrefix(entry, _dir_pattern)) {
+                if (hasPrefix(entry, _dirPattern)) {
                     auto srcDir = entry.path();
                     auto relativePathStr = srcDir.string();
                     auto destination = _dstDir.string() + relativePathStr.substr(_srcDir.string().length());
-                    ret = copySingleDirectory(srcDir, destination);
+                    uint64_t fileCount = 0;
+                    uint64_t fileSize = 0;
+                    _copyDetails.clear();
+                    ret = copySingleDirectory(srcDir, destination, fileCount, fileSize);
                     if (ret == SUCCESS) {
                         ret = deleteDirectory(srcDir);
                         if (ret != SUCCESS) {
                             std::cout << "delete src dir failed, srcDir: [" << srcDir << "]" << std::endl;
-                            break;
                         }
                     } else {
                         std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << destination
                                   << "]" << std::endl;
+                    }
+                    _copyDetails["src_dir"] = srcDir.string();
+                    _copyDetails["dst_dir"] = destination;
+                    _copyDetails["file_count"] = fileCount;
+                    _copyDetails["file_size"] = fileSize;
+                    if (ret == SUCCESS) {
+                        _copyDetails["status"] = "SUCCESS";
+                    } else {
+                        _copyDetails["status"] = "FAILED";
+                        _copyDetails["err_msg"] = getErrMsg(ret);
+                    }
+                    // TODO need upload to platform
+                    std::cout << _copyDetails.dump() << std::endl;
+
+                    if (ret != SUCCESS) {
                         break;
                     }
-                    std::cout << "copy: srcDir[" << srcDir << "], destination: [" << destination << "]" << std::endl;
+
+                    // std::cout << "copy: srcDir[" << srcDir << "], destination: [" << destination << "]" << std::endl;
                     continue;
                 }
                 ret = traverseDirectory(entry);
@@ -75,11 +94,11 @@ int DirectoryCopy::checkSpace(const fs::path &srcDir, const fs::path &dstDir) {
         return ERR_STAT_FILEPATH_FAILED;
     }
 
-    unsigned long long freeSize = stat.f_bfree * stat.f_frsize;
+    uint64_t freeSize = stat.f_bfree * stat.f_frsize;
     //std::cout << "src dir Free size: " << freeSize << " bytes\n";
     //std::cout << "src dir Free size: " << freeSize / 1024.0 / 1024 / 1024 << " GB\n";
 
-    unsigned long long usedSize = getUsedSpace(srcDir);
+    uint64_t usedSize = getUsedSpace(srcDir);
     //std::cout << "dst dir used size: " << usedSize << " bytes\n";
     //std::cout << "dst dir used size: " << usedSize / 1024.0 / 1024 / 1024 << " GB\n";
 
@@ -165,7 +184,9 @@ int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &tar
     return SUCCESS;
 }
 
-int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path &destinationDir) {
+int DirectoryCopy::copySingleDirectory(
+        const fs::path &sourceDir, const fs::path &destinationDir, uint64_t &fileCount, uint64_t &fileSize
+) {
     if (fs::exists(destinationDir)) {
         std::cout << "Destination directory " << destinationDir.string() << " already exists, delete it" << std::endl;
         auto deleteErr = this->deleteDirectory(destinationDir);
@@ -199,6 +220,8 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
                 return ERR_CREATE_DIRECTORY_FAILED;
             }
         } else {
+            fileCount++;
+            fileSize += fs::file_size(sourcePath);
             pool.enqueue([sourcePath, destination]() {
                 copy_file(sourcePath, destination);
             });

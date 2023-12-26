@@ -11,4 +11,29 @@ constexpr int ERR_CREATE_DIRECTORY_FAILED = -6;
 constexpr int ERR_DIRECTORY_NOT_EXISTS = -7;
 constexpr int ERR_STAT_FILEPATH_FAILED = -8;
 
+inline std::string getErrMsg(const int errCode) {
+    switch (errCode) {
+        case SUCCESS:
+            return "SUCCESS";
+        case ERR_UNKNOWN:
+            return "unknown error";
+        case ERR_NO_ENOUGH_SPACE:
+            return "no enough space";
+        case ERR_DELETE_DIRECTORY_FAILED:
+            return "delete directory failed";
+        case ERR_DIFFERENT_FILE_SIZE:
+            return "different file size";
+        case ERR_DIFFERENT_MD5:
+            return "different md5";
+        case ERR_CREATE_DIRECTORY_FAILED:
+            return "create directory failed";
+        case ERR_DIRECTORY_NOT_EXISTS:
+            return "directory not exists";
+        case ERR_STAT_FILEPATH_FAILED:
+            return "get filepath stat failed";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 #endif //DIRECTORYCOPY_CONSTANTS_H

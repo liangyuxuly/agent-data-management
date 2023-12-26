@@ -4,7 +4,22 @@
 $ sudo apt-get install libssl-dev
 ```
 
+ubuntu18.04
+
+```
+$ sudo apt update 
+$ sudo apt install nlohmann-json-dev
+```
+
+ubuntu20.04
+
+```
+$ sudo apt update 
+$ sudo apt install nlohmann-json3-dev
+```
+
 ### usage
+
 ```
 fs::path dstDir = "/home/ecopia/data/mapping";
 fs::path srcDir = "/home/ecopia/external_data/mapping";
@@ -17,6 +32,7 @@ if (ret != SUCCESS) {
 ```
 
 ### Build instructions
+
 ```
 $ mkdir build && cd build
 $ cmake .. && make

@@ -17,8 +17,10 @@
 #include <functional>
 #include <chrono>
 #include <regex>
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
+//namespace json = nlohmann::json;
 
 class DirectoryCopy {
 public:
@@ -41,7 +43,7 @@ private:
 
     int copySingleFile(const fs::path &, const std::string &);
 
-    int copySingleDirectory(const fs::path &, const fs::path &);
+    int copySingleDirectory(const fs::path &, const fs::path &, uint64_t &, uint64_t &);
 
     bool hasPrefix(const fs::path &, std::string &);
 
@@ -49,9 +51,10 @@ private:
 
 private:
     int _maxThreads;
-    std::string _dir_pattern;
+    std::string _dirPattern;
     fs::path _srcDir;
     fs::path _dstDir;
+    nlohmann::json _copyDetails;
 };
 
 #endif //DIRECTORYCOPY_DIRECTORY_COPY_H
