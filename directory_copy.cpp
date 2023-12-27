@@ -43,7 +43,7 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                     std::thread t([this]() { this->ticker(); });
                     ret = copySingleDirectory(srcDir, destination);
                     _copy_single_stop = true;
-                    t.join();
+                    t.detach();
                     if (ret == SUCCESS) {
                         ret = deleteDirectory(srcDir);
                         if (ret != SUCCESS) {
@@ -229,6 +229,7 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
     }
 
     std::cout << "start copy, details: " << _copyDetails.dump() << std::endl;
+    //std::thread t([this]() { this->ticker(); });
     ThreadPool pool(_maxThreads);
 
     for (const auto &dirEntry: fs::recursive_directory_iterator(sourceDir)) {
@@ -242,10 +243,11 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
                 return ERR_CREATE_DIRECTORY_FAILED;
             }
         } else {
-            pool.enqueue([sourcePath, destination]() {
-                copy_file(sourcePath, destination);
+            pool.enqueue([sourcePath, destination, this]() {
+                if (copy_file(sourcePath, destination)) {
+                    this->updateCopyDetails(sourcePath);
+                }
             });
-            updateCopyDetails(sourcePath);
         }
     }
     return SUCCESS;
@@ -274,7 +276,7 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
 
 void DirectoryCopy::ticker() {
     while (!_copy_single_stop) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
         printCopyDetails();
+        std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
     }
 }
