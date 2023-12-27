@@ -32,10 +32,13 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                     auto srcDir = entry.path();
                     auto relativePathStr = srcDir.string();
                     auto destination = _dstDir.string() + relativePathStr.substr(_srcDir.string().length());
-                    uint64_t fileCount = 0;
-                    uint64_t fileSize = 0;
                     _copyDetails.clear();
-                    ret = copySingleDirectory(srcDir, destination, fileCount, fileSize);
+                    _copyDetails["src_dir"] = srcDir.string();
+                    _copyDetails["dst_dir"] = destination;
+                    _copyDetails["copy_file_count"] = 0ull;
+                    _copyDetails["copy_file_size"] = 0ull;
+
+                    ret = copySingleDirectory(srcDir, destination);
                     if (ret == SUCCESS) {
                         ret = deleteDirectory(srcDir);
                         if (ret != SUCCESS) {
@@ -45,10 +48,6 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                         std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << destination
                                   << "]" << std::endl;
                     }
-                    _copyDetails["src_dir"] = srcDir.string();
-                    _copyDetails["dst_dir"] = destination;
-                    _copyDetails["file_count"] = fileCount;
-                    _copyDetails["file_size"] = fileSize;
                     if (ret == SUCCESS) {
                         _copyDetails["status"] = "SUCCESS";
                     } else {
@@ -57,6 +56,7 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                     }
                     // TODO need upload to platform
                     std::cout << _copyDetails.dump() << std::endl;
+                    _copyDetails.clear();
 
                     if (ret != SUCCESS) {
                         break;
@@ -98,38 +98,44 @@ int DirectoryCopy::checkSpace(const fs::path &srcDir, const fs::path &dstDir) {
     //std::cout << "src dir Free size: " << freeSize << " bytes\n";
     //std::cout << "src dir Free size: " << freeSize / 1024.0 / 1024 / 1024 << " GB\n";
 
-    uint64_t usedSize = getUsedSpace(srcDir);
+    uint64_t totalFileCount = 0, totalFileSize = 0;
+    totalFileSize = getUsedSpace(srcDir, totalFileCount);
+    _copyDetails["total_file_count"] = totalFileCount;
+    _copyDetails["total_file_size"] = totalFileSize;
     //std::cout << "dst dir used size: " << usedSize << " bytes\n";
     //std::cout << "dst dir used size: " << usedSize / 1024.0 / 1024 / 1024 << " GB\n";
 
-    if (usedSize > freeSize) {
+    if (totalFileSize > freeSize) {
         std::cerr << "no enough space to copy, srcDir: [" << srcDir.string() << "], dstDir: [" << dstDir.string()
-                  << "], src size: " << usedSize << ", dst free size: " << freeSize << std::endl;
+                  << "], src size: " << totalFileSize << ", dst free size: " << freeSize << std::endl;
         return ERR_NO_ENOUGH_SPACE;
     }
 
     return SUCCESS;
 }
 
-//uintmax_t DirectoryCopy::getUsedSpace(const fs::path &dir) {
-//    uintmax_t size = 0;
-//    for (auto &p: fs::recursive_directory_iterator(dir))
-//        if (p.is_regular_file()) size += p.file_size();
-//    return size;
-//}
-
-uintmax_t DirectoryCopy::getUsedSpace(const fs::path &dir) {
+uint64_t DirectoryCopy::getUsedSpace(const fs::path &dir, uint64_t &fileCount) {
     uintmax_t size = 0;
-    char command[1024];
-    sprintf(command, "du -sb %s", dir.string().c_str());
-    // std::cout << command << std::endl;
-    FILE *stream = popen(command, "r");
-    if (stream) {
-        fscanf(stream, "%ju", &size);
-        pclose(stream);
-    }
+    for (auto &p: fs::recursive_directory_iterator(dir))
+        if (p.is_regular_file()) {
+            size += p.file_size();
+            fileCount++;
+        }
     return size;
 }
+
+//uintmax_t DirectoryCopy::getUsedSpace(const fs::path &dir) {
+//    uintmax_t size = 0;
+//    char command[1024];
+//    sprintf(command, "du -sb %s", dir.string().c_str());
+//    // std::cout << command << std::endl;
+//    FILE *stream = popen(command, "r");
+//    if (stream) {
+//        fscanf(stream, "%ju", &size);
+//        pclose(stream);
+//    }
+//    return size;
+//}
 
 int DirectoryCopy::deleteDirectory(const fs::path &deleteDir) {
     try {
@@ -184,9 +190,7 @@ int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &tar
     return SUCCESS;
 }
 
-int DirectoryCopy::copySingleDirectory(
-        const fs::path &sourceDir, const fs::path &destinationDir, uint64_t &fileCount, uint64_t &fileSize
-) {
+int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path &destinationDir) {
     if (fs::exists(destinationDir)) {
         std::cout << "Destination directory " << destinationDir.string() << " already exists, delete it" << std::endl;
         auto deleteErr = this->deleteDirectory(destinationDir);
@@ -220,8 +224,10 @@ int DirectoryCopy::copySingleDirectory(
                 return ERR_CREATE_DIRECTORY_FAILED;
             }
         } else {
-            fileCount++;
-            fileSize += fs::file_size(sourcePath);
+            uint64_t copyFileCount = _copyDetails["copy_file_count"].get<uint64_t>();
+            uint64_t copyFileSize = _copyDetails["copy_file_size"].get<uint64_t>();
+            _copyDetails["copy_file_count"] = copyFileCount + 1;
+            _copyDetails["copy_file_size"] = copyFileSize + fs::file_size(sourcePath);
             pool.enqueue([sourcePath, destination]() {
                 copy_file(sourcePath, destination);
             });

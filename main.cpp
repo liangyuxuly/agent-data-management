@@ -2,8 +2,8 @@
 #include "constants.h"
 
 int main() {
-    fs::path dstDir = "/home/ecopia/data/mapping";
-    fs::path srcDir = "/home/ecopia/external_data/mapping";
+    fs::path srcDir = "/home/ecopia/data/mapping";
+    fs::path dstDir = "/home/ecopia/external_data/mapping";
     int maxThread = 2;
     DirectoryCopy dc(srcDir, dstDir, maxThread);
     int ret = dc.copyDirectory();

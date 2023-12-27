@@ -43,11 +43,11 @@ private:
 
     int copySingleFile(const fs::path &, const std::string &);
 
-    int copySingleDirectory(const fs::path &, const fs::path &, uint64_t &, uint64_t &);
+    int copySingleDirectory(const fs::path &, const fs::path &);
 
     bool hasPrefix(const fs::path &, std::string &);
 
-    uintmax_t getUsedSpace(const fs::path &);
+    uint64_t getUsedSpace(const fs::path &, uint64_t &);
 
 private:
     int _maxThreads;
