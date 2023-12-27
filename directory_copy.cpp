@@ -7,7 +7,7 @@
 
 DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread = 5)
         : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"),
-          _copy_single_ticker_interval(1), _copy_single_stop(true) {}
+          _copy_single_ticker_interval(500), _copy_single_stop(true) {}
 
 DirectoryCopy::~DirectoryCopy() {}
 
