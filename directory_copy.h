@@ -45,16 +45,25 @@ private:
 
     int copySingleDirectory(const fs::path &, const fs::path &);
 
+    void updateCopyDetails(const fs::path &);
+
+    void printCopyDetails();
+
     bool hasPrefix(const fs::path &, std::string &);
 
     uint64_t getUsedSpace(const fs::path &, uint64_t &);
+
+    void ticker();
 
 private:
     int _maxThreads;
     std::string _dirPattern;
     fs::path _srcDir;
     fs::path _dstDir;
+    std::mutex _copy_mutex;
     nlohmann::json _copyDetails;
+    std::atomic<bool> _copy_single_stop;
+    int _copy_single_ticker_interval;
 };
 
 #endif //DIRECTORYCOPY_DIRECTORY_COPY_H

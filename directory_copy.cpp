@@ -6,7 +6,8 @@
 #include <nlohmann/json.hpp>
 
 DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread = 5)
-        : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {}
+        : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"),
+          _copy_single_ticker_interval(1), _copy_single_stop(true) {}
 
 DirectoryCopy::~DirectoryCopy() {}
 
@@ -38,7 +39,11 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                     _copyDetails["copy_file_count"] = 0ull;
                     _copyDetails["copy_file_size"] = 0ull;
 
+                    _copy_single_stop = false;
+                    std::thread t([this]() { this->ticker(); });
                     ret = copySingleDirectory(srcDir, destination);
+                    _copy_single_stop = true;
+                    t.join();
                     if (ret == SUCCESS) {
                         ret = deleteDirectory(srcDir);
                         if (ret != SUCCESS) {
@@ -55,7 +60,7 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                         _copyDetails["err_msg"] = getErrMsg(ret);
                     }
                     // TODO need upload to platform
-                    std::cout << _copyDetails.dump() << std::endl;
+                    std::cout << "copy finished, details: " << _copyDetails.dump() << std::endl;
                     _copyDetails.clear();
 
                     if (ret != SUCCESS) {
@@ -190,6 +195,19 @@ int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &tar
     return SUCCESS;
 }
 
+void DirectoryCopy::updateCopyDetails(const fs::path &path) {
+    uint64_t copyFileCount = _copyDetails["copy_file_count"].get<uint64_t>();
+    uint64_t copyFileSize = _copyDetails["copy_file_size"].get<uint64_t>();
+    std::lock_guard<std::mutex> lock(_copy_mutex);
+    _copyDetails["copy_file_count"] = copyFileCount + 1;
+    _copyDetails["copy_file_size"] = copyFileSize + fs::file_size(path);
+}
+
+void DirectoryCopy::printCopyDetails() {
+    std::lock_guard<std::mutex> lock(_copy_mutex);
+    std::cout << "copy progress, details: " << _copyDetails.dump() << std::endl;
+}
+
 int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path &destinationDir) {
     if (fs::exists(destinationDir)) {
         std::cout << "Destination directory " << destinationDir.string() << " already exists, delete it" << std::endl;
@@ -210,7 +228,7 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
         return ret;
     }
 
-    //std::cout << "_maxThreads: " << _maxThreads << std::endl;
+    std::cout << "start copy, details: " << _copyDetails.dump() << std::endl;
     ThreadPool pool(_maxThreads);
 
     for (const auto &dirEntry: fs::recursive_directory_iterator(sourceDir)) {
@@ -224,13 +242,10 @@ int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path
                 return ERR_CREATE_DIRECTORY_FAILED;
             }
         } else {
-            uint64_t copyFileCount = _copyDetails["copy_file_count"].get<uint64_t>();
-            uint64_t copyFileSize = _copyDetails["copy_file_size"].get<uint64_t>();
-            _copyDetails["copy_file_count"] = copyFileCount + 1;
-            _copyDetails["copy_file_size"] = copyFileSize + fs::file_size(sourcePath);
             pool.enqueue([sourcePath, destination]() {
                 copy_file(sourcePath, destination);
             });
+            updateCopyDetails(sourcePath);
         }
     }
     return SUCCESS;
@@ -255,4 +270,11 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
     }
 
     return false;
+}
+
+void DirectoryCopy::ticker() {
+    while (!_copy_single_stop) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
+        printCopyDetails();
+    }
 }
