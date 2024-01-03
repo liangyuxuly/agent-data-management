@@ -10,6 +10,7 @@ constexpr int ERR_DIFFERENT_MD5 = -5;
 constexpr int ERR_CREATE_DIRECTORY_FAILED = -6;
 constexpr int ERR_DIRECTORY_NOT_EXISTS = -7;
 constexpr int ERR_STAT_FILEPATH_FAILED = -8;
+constexpr int ERR_PARTIAL_COPY_FAILED = -9;
 
 inline std::string getErrMsg(const int errCode) {
     switch (errCode) {
@@ -31,6 +32,8 @@ inline std::string getErrMsg(const int errCode) {
             return "directory not exists";
         case ERR_STAT_FILEPATH_FAILED:
             return "get filepath stat failed";
+        case ERR_PARTIAL_COPY_FAILED:
+            return "some files failed to copy";
         default:
             return "UNKNOWN";
     }

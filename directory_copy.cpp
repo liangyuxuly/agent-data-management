@@ -18,7 +18,11 @@ int DirectoryCopy::copyDirectory() {
     }
 
     if (ret == SUCCESS) {
+        // TODO need upload to platform when copy start (/xx/mapping)
+        std::cout << "start copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
         ret = traverseDirectory(_srcDir);
+        // TODO need upload to platform when copy finished (/xx/mapping)
+        std::cout << "finish copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
     }
 
     return ret;
@@ -30,45 +34,53 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
         for (const auto &entry: fs::directory_iterator(path)) {
             if (fs::is_directory(entry)) {
                 if (hasPrefix(entry, _dirPattern)) {
-                    auto srcDir = entry.path();
-                    auto relativePathStr = srcDir.string();
-                    auto destination = _dstDir.string() + relativePathStr.substr(_srcDir.string().length());
-                    _copyDetails.clear();
-                    _copyDetails["src_dir"] = srcDir.string();
-                    _copyDetails["dst_dir"] = destination;
-                    _copyDetails["copy_file_count"] = 0ull;
-                    _copyDetails["copy_file_size"] = 0ull;
-
-                    _copy_single_stop = false;
-                    std::thread t([this]() { this->ticker(); });
-                    ret = copySingleDirectory(srcDir, destination);
-                    _copy_single_stop = true;
-                    t.detach();
-                    if (ret == SUCCESS) {
-                        ret = deleteDirectory(srcDir);
-                        if (ret != SUCCESS) {
-                            std::cout << "delete src dir failed, srcDir: [" << srcDir << "]" << std::endl;
-                        }
-                    } else {
-                        std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << destination
-                                  << "]" << std::endl;
-                    }
-                    if (ret == SUCCESS) {
-                        _copyDetails["status"] = "SUCCESS";
-                    } else {
-                        _copyDetails["status"] = "FAILED";
-                        _copyDetails["err_msg"] = getErrMsg(ret);
-                    }
-                    // TODO need upload to platform
-                    std::cout << "copy finished, details: " << _copyDetails.dump() << std::endl;
-                    _copyDetails.clear();
-
+                    ret = copySingleDirectory(entry.path());
                     if (ret != SUCCESS) {
                         break;
                     }
-
-                    // std::cout << "copy: srcDir[" << srcDir << "], destination: [" << destination << "]" << std::endl;
                     continue;
+
+//                    auto srcDir = entry.path();
+//                    auto relativePathStr = srcDir.string();
+//                    auto destination = _dstDir.string() + relativePathStr.substr(_srcDir.string().length());
+//                    _copyDetails.clear();
+//                    _copyDetails["src_dir"] = srcDir.string();
+//                    _copyDetails["dst_dir"] = destination;
+//                    _copyDetails["copy_file_count"] = 0ull;
+//                    _copyDetails["copy_file_size"] = 0ull;
+//
+//                    // TODO need upload to platform when single directory copy start (YYYY_MM_DD_xx_xx_xx)
+//                    // print copy progress thread
+//                    _copy_single_stop = false;
+//                    std::thread t([this]() { this->ticker(); });
+//                    ret = copySingleDirectory(srcDir, destination);
+//                    _copy_single_stop = true;
+//                    t.join();
+//                    if (ret == SUCCESS) {
+//                        ret = deleteDirectory(srcDir);
+//                        if (ret != SUCCESS) {
+//                            std::cout << "delete src dir failed, srcDir: [" << srcDir << "]" << std::endl;
+//                        }
+//                    } else {
+//                        std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << destination
+//                                  << "]" << std::endl;
+//                    }
+//                    if (ret == SUCCESS) {
+//                        _copyDetails["status"] = "SUCCESS";
+//                    } else {
+//                        _copyDetails["status"] = "FAILED";
+//                        _copyDetails["err_msg"] = getErrMsg(ret);
+//                    }
+//                    // TODO need upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
+//                    std::cout << "copy finished, details: " << _copyDetails.dump() << std::endl;
+//                    _copyDetails.clear();
+
+//                    if (ret != SUCCESS) {
+//                        break;
+//                    }
+//
+//                    // std::cout << "copy: srcDir[" << srcDir << "], destination: [" << destination << "]" << std::endl;
+//                    continue;
                 }
                 ret = traverseDirectory(entry);
                 if (ret != SUCCESS) {
@@ -205,52 +217,146 @@ void DirectoryCopy::updateCopyDetails(const fs::path &path) {
 
 void DirectoryCopy::printCopyDetails() {
     std::lock_guard<std::mutex> lock(_copy_mutex);
-    std::cout << "copy progress, details: " << _copyDetails.dump() << std::endl;
+    std::cout << "copy progress, details: " << _copyDetails.dump(4) << std::endl;
 }
 
-int DirectoryCopy::copySingleDirectory(const fs::path &sourceDir, const fs::path &destinationDir) {
-    if (fs::exists(destinationDir)) {
-        std::cout << "Destination directory " << destinationDir.string() << " already exists, delete it" << std::endl;
-        auto deleteErr = this->deleteDirectory(destinationDir);
-        if (deleteErr != SUCCESS) {
+int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
+    // auto srcDir = entry.path();
+    int ret = SUCCESS;
+    auto relativeDirStr = srcDir.string();
+    auto dstDir = _dstDir.string() + relativeDirStr.substr(_srcDir.string().length());
+
+    _copyDetails.clear();
+    _copyDetails["src_dir"] = srcDir.string();
+    _copyDetails["dst_dir"] = dstDir;
+    _copyDetails["copy_file_count"] = 0ull;
+    _copyDetails["copy_file_size"] = 0ull;
+
+    // TODO need upload to platform when single directory copy start (YYYY_MM_DD_xx_xx_xx)
+    std::cout << "start copy single directory: src: [" << srcDir.string() << "], dst: [" << dstDir << "]" << std::endl;
+
+    if (fs::exists(dstDir)) {
+        std::cout << "Destination directory " << dstDir << " already exists, delete it" << std::endl;
+        ret = this->deleteDirectory(dstDir);
+        if (ret != SUCCESS) {
             std::cout << "delete directory failed!" << std::endl;
-            return ERR_DELETE_DIRECTORY_FAILED;
         }
     }
 
-    if (!fs::create_directories(destinationDir)) {
-        std::cout << "Could not create destination directory" << std::endl;
-        return ERR_CREATE_DIRECTORY_FAILED;
-    }
-    int ret = checkSpace(sourceDir, destinationDir);
-    if (ret != SUCCESS) {
-        std::cout << "check space failed" << std::endl;
-        return ret;
-    }
-
-    std::cout << "start copy, details: " << _copyDetails.dump() << std::endl;
-    //std::thread t([this]() { this->ticker(); });
-    ThreadPool pool(_maxThreads);
-
-    for (const auto &dirEntry: fs::recursive_directory_iterator(sourceDir)) {
-        const auto &sourcePath = dirEntry.path();
-        auto relativePathStr = sourcePath.string();
-        auto destination = destinationDir.string() + relativePathStr.substr(sourceDir.string().length());
-        //std::cout << "sourcePath: " << sourcePath.string() << ", relativePathStr: " << relativePathStr << ", destination: " << destination << std::endl;
-        if (fs::is_directory(sourcePath)) {
-            if (!fs::create_directories(destination)) {
-                std::cout << "create directories failed" << std::endl;
-                return ERR_CREATE_DIRECTORY_FAILED;
+    if (ret == SUCCESS) {
+        try {
+            if (!fs::create_directories(dstDir)) {
+                std::cout << "could not create destination directory: " << dstDir << std::endl;
+                ret = ERR_CREATE_DIRECTORY_FAILED;
             }
-        } else {
-            pool.enqueue([sourcePath, destination, this]() {
-                if (copy_file(sourcePath, destination)) {
-                    this->updateCopyDetails(sourcePath);
-                }
-            });
+        } catch (fs::filesystem_error &e) {
+            std::cout << "Failed to create destination directory: " << dstDir << std::endl;
+            std::cout << "Reason: " << e.what() << std::endl;
+            ret = ERR_CREATE_DIRECTORY_FAILED;
         }
     }
-    return SUCCESS;
+
+    if (ret == SUCCESS) {
+        struct statvfs stat;
+
+        if (statvfs(dstDir.c_str(), &stat) != 0) {
+            std::cout << "Failed to get file system statistics" << std::endl;
+            ret = ERR_STAT_FILEPATH_FAILED;
+        } else {
+            uint64_t freeSize = stat.f_bfree * stat.f_frsize;
+            //std::cout << "src dir Free size: " << freeSize << " bytes\n";
+            //std::cout << "src dir Free size: " << freeSize / 1024.0 / 1024 / 1024 << " GB\n";
+
+            uint64_t totalFileCount = 0, totalFileSize = 0;
+            totalFileSize = getUsedSpace(srcDir, totalFileCount);
+            _copyDetails["total_file_count"] = totalFileCount;
+            _copyDetails["total_file_size"] = totalFileSize;
+            //std::cout << "dst dir used size: " << usedSize << " bytes\n";
+            //std::cout << "dst dir used size: " << usedSize / 1024.0 / 1024 / 1024 << " GB\n";
+
+            if (totalFileSize > freeSize) {
+                std::cout << "no enough space to copy, srcDir: [" << srcDir.string() << "], dstDir: [" << dstDir
+                          << "], src size: " << totalFileSize << ", dst free size: " << freeSize << std::endl;
+                ret = ERR_NO_ENOUGH_SPACE;
+            }
+        }
+    }
+
+    if (ret == SUCCESS) {
+        std::cout << "start copy, details: " << _copyDetails.dump(4) << std::endl;
+        //std::thread t([this]() { this->ticker(); });
+        ThreadPool pool(_maxThreads);
+
+        // print copy progress thread
+        _copy_single_stop = false;
+        std::thread t([this]() { this->ticker(); });
+
+        int copyFailedCount = 0;
+        for (const auto &dirEntry: fs::recursive_directory_iterator(srcDir)) {
+            const auto &srcPath = dirEntry.path();
+            auto relativePathStr = srcPath.string();
+            auto dstPath = dstDir + relativePathStr.substr(srcDir.string().length());
+            std::cout << "srcPath: " << srcPath.string() << ", relativePathStr: " << relativePathStr << ", dstPath: "
+                      << dstPath << std::endl;
+            if (fs::is_directory(srcPath)) {
+                try {
+                    if (!fs::create_directories(dstPath)) {
+                        std::cout << "create directories failed: " << dstPath << std::endl;
+                        ret = ERR_CREATE_DIRECTORY_FAILED;
+                        break;
+                    }
+                } catch (fs::filesystem_error &e) {
+                    std::cout << "Failed to create directories file: " << dstPath << std::endl;
+                    std::cout << "Reason: " << e.what() << std::endl;
+                    ret = ERR_CREATE_DIRECTORY_FAILED;
+                    break;
+                }
+            } else {
+                pool.enqueue([srcPath, dstPath, this, &copyFailedCount]() {
+                    try {
+                        if (fs::copy_file(srcPath, dstPath)) {
+                            this->updateCopyDetails(srcPath);
+                        }
+                        //std::cout << "Successfully removed directory: " << deleteDir << std::endl;
+                    } catch (fs::filesystem_error &e) {
+                        std::cout << "Failed to copy file: " << srcPath << std::endl;
+                        std::cout << "Reason: " << e.what() << std::endl;
+                        copyFailedCount++;
+                    }
+                });
+            }
+        }
+
+        _copy_single_stop = true;
+        t.join();
+
+        if (copyFailedCount > 0) {
+            std::cout << "some file copy failed, failed count: " << copyFailedCount << std::endl;
+            ret = ERR_PARTIAL_COPY_FAILED;
+        }
+    }
+
+    if (ret == SUCCESS) {
+        ret = deleteDirectory(srcDir);
+        if (ret != SUCCESS) {
+            std::cout << "delete src dir failed, srcDir: [" << srcDir << "]" << std::endl;
+        }
+    } else {
+        std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << dstDir
+                  << "]" << std::endl;
+    }
+
+    if (ret == SUCCESS) {
+        _copyDetails["status"] = "SUCCESS";
+    } else {
+        _copyDetails["status"] = "FAILED";
+        _copyDetails["err_msg"] = getErrMsg(ret);
+    }
+    // TODO need upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
+    std::cout << "copy finished, details: " << _copyDetails.dump(4) << std::endl;
+    _copyDetails.clear();
+
+    return ret;
 }
 
 bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
@@ -276,7 +382,7 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
 
 void DirectoryCopy::ticker() {
     while (!_copy_single_stop) {
-        printCopyDetails();
         std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
+        printCopyDetails();
     }
 }

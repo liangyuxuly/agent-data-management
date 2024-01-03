@@ -43,7 +43,7 @@ private:
 
     int copySingleFile(const fs::path &, const std::string &);
 
-    int copySingleDirectory(const fs::path &, const fs::path &);
+    int copySingleDirectory(const fs::path &);
 
     void updateCopyDetails(const fs::path &);
 
