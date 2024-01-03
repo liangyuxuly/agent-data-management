@@ -7,7 +7,7 @@
 
 DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread = 5)
         : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"),
-          _copy_single_ticker_interval(500), _copy_single_stop(true) {}
+          _copy_single_ticker_interval(500) {}
 
 DirectoryCopy::~DirectoryCopy() {}
 
@@ -39,48 +39,6 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                         break;
                     }
                     continue;
-
-//                    auto srcDir = entry.path();
-//                    auto relativePathStr = srcDir.string();
-//                    auto destination = _dstDir.string() + relativePathStr.substr(_srcDir.string().length());
-//                    _copyDetails.clear();
-//                    _copyDetails["src_dir"] = srcDir.string();
-//                    _copyDetails["dst_dir"] = destination;
-//                    _copyDetails["copy_file_count"] = 0ull;
-//                    _copyDetails["copy_file_size"] = 0ull;
-//
-//                    // TODO need upload to platform when single directory copy start (YYYY_MM_DD_xx_xx_xx)
-//                    // print copy progress thread
-//                    _copy_single_stop = false;
-//                    std::thread t([this]() { this->ticker(); });
-//                    ret = copySingleDirectory(srcDir, destination);
-//                    _copy_single_stop = true;
-//                    t.join();
-//                    if (ret == SUCCESS) {
-//                        ret = deleteDirectory(srcDir);
-//                        if (ret != SUCCESS) {
-//                            std::cout << "delete src dir failed, srcDir: [" << srcDir << "]" << std::endl;
-//                        }
-//                    } else {
-//                        std::cout << "copySingleDirectory failed, srcDir: [" << srcDir << "], dstDir: [" << destination
-//                                  << "]" << std::endl;
-//                    }
-//                    if (ret == SUCCESS) {
-//                        _copyDetails["status"] = "SUCCESS";
-//                    } else {
-//                        _copyDetails["status"] = "FAILED";
-//                        _copyDetails["err_msg"] = getErrMsg(ret);
-//                    }
-//                    // TODO need upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
-//                    std::cout << "copy finished, details: " << _copyDetails.dump() << std::endl;
-//                    _copyDetails.clear();
-
-//                    if (ret != SUCCESS) {
-//                        break;
-//                    }
-//
-//                    // std::cout << "copy: srcDir[" << srcDir << "], destination: [" << destination << "]" << std::endl;
-//                    continue;
                 }
                 ret = traverseDirectory(entry);
                 if (ret != SUCCESS) {
@@ -288,8 +246,8 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
         ThreadPool pool(_maxThreads);
 
         // print copy progress thread
-        _copy_single_stop = false;
-        std::thread t([this]() { this->ticker(); });
+        std::atomic<bool> copy_stop = false;
+        std::thread t([this, &copy_stop]() { this->ticker(copy_stop); });
 
         int copyFailedCount = 0;
         for (const auto &dirEntry: fs::recursive_directory_iterator(srcDir)) {
@@ -327,8 +285,8 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
             }
         }
 
-        _copy_single_stop = true;
-        t.join();
+        copy_stop = true;
+        t.detach();
 
         if (copyFailedCount > 0) {
             std::cout << "some file copy failed, failed count: " << copyFailedCount << std::endl;
@@ -380,9 +338,11 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
     return false;
 }
 
-void DirectoryCopy::ticker() {
-    while (!_copy_single_stop) {
+void DirectoryCopy::ticker(std::atomic<bool> &stop) {
+    std::cout << "start ticker" << std::endl;
+    while (!stop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
         printCopyDetails();
     }
+    std::cout << "stop ticker" << std::endl;
 }

@@ -53,7 +53,7 @@ private:
 
     uint64_t getUsedSpace(const fs::path &, uint64_t &);
 
-    void ticker();
+    void ticker(std::atomic<bool> &);
 
 private:
     int _maxThreads;
@@ -62,7 +62,7 @@ private:
     fs::path _dstDir;
     std::mutex _copy_mutex;
     nlohmann::json _copyDetails;
-    std::atomic<bool> _copy_single_stop;
+    // std::atomic<bool> _copy_single_stop;
     int _copy_single_ticker_interval;
 };
 
