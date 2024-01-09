@@ -5,9 +5,9 @@
 #include <cstdio>
 #include <nlohmann/json.hpp>
 
-DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread = 5)
+DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread)
         : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"),
-          _copy_single_ticker_interval(500) {}
+          _copySingleTickerInterval(500), _copyStopSignal(false) {}
 
 DirectoryCopy::~DirectoryCopy() {}
 
@@ -17,18 +17,71 @@ int DirectoryCopy::copyDirectory() {
         ret = checkDirectory(_dstDir);
     }
 
+    std::vector<std::string> dirList;
+    nlohmann::json overall;
+
     if (ret == SUCCESS) {
-        // TODO need upload to platform when copy start (/xx/mapping)
-        std::cout << "start copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
-        ret = traverseDirectory(_srcDir);
-        // TODO need upload to platform when copy finished (/xx/mapping)
+        ret = traverseDirectory(_srcDir, dirList);
+    }
+
+    if (ret == SUCCESS) {
+        _copyDetails.clear();
+        overall["src_dir"] = _srcDir.string();
+        overall["dst_dir"] = _dstDir.string();
+        overall["copy_dir_list"] = dirList;
+        overall["total_dir_count"] = dirList.size();
+        _copyDetails["overall"] = overall;
+        _copyDetails["step_tag"] = STEP_TAG_COPY_DIRECTORY_START;
+        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+        std::cout << _copyDetails.dump(4) << std::endl;
+        // TODO upload to platform
+
+        ret = traverseDirectoryAndCopy(_srcDir);
+        if (ret == SUCCESS) {
+            _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+        } else if (ret == STOP_COPY_SIGNAL_RECEIVED) {
+            _copyDetails["step_status"] = STEP_STATUS_STOPPED;
+            // reset ret
+            ret = SUCCESS;
+        } else {
+            _copyDetails["step_status"] = STEP_STATUS_FAILED;
+            _copyDetails["step_err_msg"] = getErrMsg(ret);
+        }
+        _copyDetails["step_tag"] = STEP_TAG_COPY_DIRECTORY_FINISHED;
+        std::cout << _copyDetails.dump(4) << std::endl;
+        // TODO upload to platform
         std::cout << "finish copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
     }
 
     return ret;
 }
 
-int DirectoryCopy::traverseDirectory(const fs::path &path) {
+int DirectoryCopy::traverseDirectory(const fs::path &path, std::vector<std::string> &dirList) {
+    int ret = SUCCESS;
+    if (fs::is_directory(path)) {
+        for (const auto &entry: fs::directory_iterator(path)) {
+            if (fs::is_directory(entry)) {
+                if (hasPrefix(entry, _dirPattern)) {
+                    dirList.push_back(entry.path().string());
+                } else {
+                    ret = traverseDirectory(entry, dirList);
+                    if (ret != SUCCESS) {
+                        break;
+                    }
+                }
+            } else if (fs::is_regular_file(entry)) {
+                //std::cout << entry.path() << std::endl;
+                continue;
+            }
+        }
+    }
+    return ret;
+}
+
+int DirectoryCopy::traverseDirectoryAndCopy(const fs::path &path) {
+    if (_copyStopSignal) {
+        return STOP_COPY_SIGNAL_RECEIVED;
+    }
     int ret = SUCCESS;
     if (fs::is_directory(path)) {
         for (const auto &entry: fs::directory_iterator(path)) {
@@ -40,7 +93,7 @@ int DirectoryCopy::traverseDirectory(const fs::path &path) {
                     }
                     continue;
                 }
-                ret = traverseDirectory(entry);
+                ret = traverseDirectoryAndCopy(entry);
                 if (ret != SUCCESS) {
                     break;
                 }
@@ -166,29 +219,35 @@ int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &tar
 }
 
 void DirectoryCopy::updateCopyDetails(const fs::path &path) {
-    uint64_t copyFileCount = _copyDetails["copy_file_count"].get<uint64_t>();
-    uint64_t copyFileSize = _copyDetails["copy_file_size"].get<uint64_t>();
-    std::lock_guard<std::mutex> lock(_copy_mutex);
-    _copyDetails["copy_file_count"] = copyFileCount + 1;
-    _copyDetails["copy_file_size"] = copyFileSize + fs::file_size(path);
+    std::lock_guard<std::mutex> lock(_copyMutex);
+    uint64_t copyFileCount = _copyDetails["current"]["copy_file_count"].get<uint64_t>();
+    uint64_t copyFileSize = _copyDetails["current"]["copy_file_size"].get<uint64_t>();
+    _copyDetails["current"]["copy_file_count"] = copyFileCount + 1;
+    _copyDetails["current"]["copy_file_size"] = copyFileSize + fs::file_size(path);
 }
 
 void DirectoryCopy::printCopyDetails() {
-    std::lock_guard<std::mutex> lock(_copy_mutex);
+    std::lock_guard<std::mutex> lock(_copyMutex);
+    _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
+    // TODO upload to platform
     std::cout << "copy progress, details: " << _copyDetails.dump(4) << std::endl;
 }
 
 int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
     // auto srcDir = entry.path();
+    if (_copyStopSignal) {
+        return STOP_COPY_SIGNAL_RECEIVED;
+    }
+
     int ret = SUCCESS;
     auto relativeDirStr = srcDir.string();
     auto dstDir = _dstDir.string() + relativeDirStr.substr(_srcDir.string().length());
 
-    _copyDetails.clear();
-    _copyDetails["src_dir"] = srcDir.string();
-    _copyDetails["dst_dir"] = dstDir;
-    _copyDetails["copy_file_count"] = 0ull;
-    _copyDetails["copy_file_size"] = 0ull;
+    nlohmann::json current;
+    current["src_dir"] = srcDir.string();
+    current["dst_dir"] = dstDir;
+    current["copy_file_count"] = 0ull;
+    current["copy_file_size"] = 0ull;
 
     // TODO need upload to platform when single directory copy start (YYYY_MM_DD_xx_xx_xx)
     std::cout << "start copy single directory: src: [" << srcDir.string() << "], dst: [" << dstDir << "]" << std::endl;
@@ -227,8 +286,8 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
 
             uint64_t totalFileCount = 0, totalFileSize = 0;
             totalFileSize = getUsedSpace(srcDir, totalFileCount);
-            _copyDetails["total_file_count"] = totalFileCount;
-            _copyDetails["total_file_size"] = totalFileSize;
+            current["total_file_count"] = totalFileCount;
+            current["total_file_size"] = totalFileSize;
             //std::cout << "dst dir used size: " << usedSize << " bytes\n";
             //std::cout << "dst dir used size: " << usedSize / 1024.0 / 1024 / 1024 << " GB\n";
 
@@ -241,6 +300,11 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
+        _copyDetails["current"] = current;
+        _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_START;
+        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+        // _copyDetails["overall"].erase("");
+        // TODO upload to platform
         std::cout << "start copy, details: " << _copyDetails.dump(4) << std::endl;
         //std::thread t([this]() { this->ticker(); });
         ThreadPool pool(_maxThreads);
@@ -305,14 +369,23 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
-        _copyDetails["status"] = "SUCCESS";
+        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+
+        if (_copyDetails["overall"].find("finished_dir_list") == _copyDetails["overall"].end()) {
+            _copyDetails["overall"]["finished_dir_list"] = {srcDir.string()};
+        } else {
+            std::vector<std::string> dirList = _copyDetails["overall"]["finished_dir_list"];
+            dirList.push_back(srcDir.string());
+            _copyDetails["overall"]["finished_dir_list"] = dirList;
+        }
     } else {
-        _copyDetails["status"] = "FAILED";
-        _copyDetails["err_msg"] = getErrMsg(ret);
+        _copyDetails["step_status"] = STEP_STATUS_FAILED;
+        _copyDetails["step_err_msg"] = getErrMsg(ret);
     }
-    // TODO need upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
-    std::cout << "copy finished, details: " << _copyDetails.dump(4) << std::endl;
-    _copyDetails.clear();
+    _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED;
+    // TODO upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
+    std::cout << "copy single directory finished, details: " << _copyDetails.dump(4) << std::endl;
+    current.clear();
 
     return ret;
 }
@@ -341,8 +414,12 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
 void DirectoryCopy::ticker(std::atomic<bool> &stop) {
     std::cout << "start ticker" << std::endl;
     while (!stop) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(_copy_single_ticker_interval));
+        std::this_thread::sleep_for(std::chrono::milliseconds(_copySingleTickerInterval));
         printCopyDetails();
     }
     std::cout << "stop ticker" << std::endl;
+}
+
+void DirectoryCopy::stopCopy() {
+    _copyStopSignal = true;
 }

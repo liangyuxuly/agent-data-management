@@ -30,8 +30,12 @@ public:
 
     int copyDirectory();
 
+    void stopCopy();
+
 private:
-    int traverseDirectory(const fs::path &);
+    int traverseDirectory(const fs::path &, std::vector<std::string> &);
+
+    int traverseDirectoryAndCopy(const fs::path &);
 
     int checkDirectory(const fs::path &);
 
@@ -60,10 +64,10 @@ private:
     std::string _dirPattern;
     fs::path _srcDir;
     fs::path _dstDir;
-    std::mutex _copy_mutex;
+    std::mutex _copyMutex;
     nlohmann::json _copyDetails;
-    // std::atomic<bool> _copy_single_stop;
-    int _copy_single_ticker_interval;
+    std::atomic<bool> _copyStopSignal;
+    int _copySingleTickerInterval;
 };
 
 #endif //DIRECTORYCOPY_DIRECTORY_COPY_H

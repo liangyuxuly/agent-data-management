@@ -5,8 +5,20 @@ int main() {
     fs::path dstDir = "/home/ecopia/data/mapping";
     fs::path srcDir = "/home/ecopia/external_data/mapping";
     int maxThread = 2;
+    int ret = SUCCESS;
     DirectoryCopy dc(srcDir, dstDir, maxThread);
-    int ret = dc.copyDirectory();
+
+    std::thread t([&dc, &ret]() { ret = dc.copyDirectory(); });
+
+    std::thread t1([&dc]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::cout << "active copyStopSignal" << std::endl;
+        dc.stopCopy();
+    });
+
+    t.join();
+    t1.join();
+    //int ret = dc.copyDirectory();
     if (ret != SUCCESS) {
         std::cout << "copyDirectory failed" << std::endl;
     }
