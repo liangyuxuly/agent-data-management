@@ -1,5 +1,5 @@
-#ifndef DIRECTORYCOPY_DIRECTORY_COPY_H
-#define DIRECTORYCOPY_DIRECTORY_COPY_H
+#ifndef DATAMANAGEMENT_DATA_MANAGEMENT_H
+#define DATAMANAGEMENT_DATA_MANAGEMENT_H
 
 #include <iostream>
 #include <sys/statvfs.h>
@@ -22,18 +22,22 @@
 namespace fs = std::filesystem;
 //namespace json = nlohmann::json;
 
-class DirectoryCopy {
+class DataManagement {
 public:
-    DirectoryCopy(fs::path &, fs::path &, int);
+    DataManagement(fs::path &);
 
-    ~DirectoryCopy();
+    ~DataManagement();
 
-    int copyDirectory();
+    int copyDirectory(fs::path &);
 
     void stopCopy();
 
+    void setMaxCopyThread(int);
+
+    int getSingleDirList(std::vector <std::string> &);
+
 private:
-    int traverseDirectory(const fs::path &, std::vector<std::string> &);
+    int traverseDirectory(const fs::path &, std::vector <std::string> &);
 
     int traverseDirectoryAndCopy(const fs::path &);
 
@@ -70,4 +74,4 @@ private:
     int _copySingleTickerInterval;
 };
 
-#endif //DIRECTORYCOPY_DIRECTORY_COPY_H
+#endif //DATAMANAGEMENT_DATA_MANAGEMENT_H

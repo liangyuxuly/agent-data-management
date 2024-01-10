@@ -1,23 +1,27 @@
-#include "directory_copy.h"
+#include "data_management.h"
 #include "constants.h"
 #include "thread_pool.h"
 #include <iostream>
 #include <cstdio>
 #include <nlohmann/json.hpp>
 
-DirectoryCopy::DirectoryCopy(fs::path &srcDir, fs::path &dstDir, int maxThread)
-        : _srcDir(srcDir), _dstDir(dstDir), _maxThreads(maxThread), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"),
-          _copySingleTickerInterval(500), _copyStopSignal(false) {}
+DataManagement::DataManagement(fs::path &srcDir)
+        : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {}
 
-DirectoryCopy::~DirectoryCopy() {}
+DataManagement::~DataManagement() {}
 
-int DirectoryCopy::copyDirectory() {
+int DataManagement::copyDirectory(fs::path &dstDir) {
+
+    _dstDir = dstDir;
+    _copySingleTickerInterval = 500;
+    _copyStopSignal = false;
+
     int ret = checkDirectory(_srcDir);
     if (ret == SUCCESS) {
         ret = checkDirectory(_dstDir);
     }
 
-    std::vector<std::string> dirList;
+    std::vector <std::string> dirList;
     nlohmann::json overall;
 
     if (ret == SUCCESS) {
@@ -56,7 +60,7 @@ int DirectoryCopy::copyDirectory() {
     return ret;
 }
 
-int DirectoryCopy::traverseDirectory(const fs::path &path, std::vector<std::string> &dirList) {
+int DataManagement::traverseDirectory(const fs::path &path, std::vector <std::string> &dirList) {
     int ret = SUCCESS;
     if (fs::is_directory(path)) {
         for (const auto &entry: fs::directory_iterator(path)) {
@@ -78,7 +82,7 @@ int DirectoryCopy::traverseDirectory(const fs::path &path, std::vector<std::stri
     return ret;
 }
 
-int DirectoryCopy::traverseDirectoryAndCopy(const fs::path &path) {
+int DataManagement::traverseDirectoryAndCopy(const fs::path &path) {
     if (_copyStopSignal) {
         return STOP_COPY_SIGNAL_RECEIVED;
     }
@@ -106,7 +110,7 @@ int DirectoryCopy::traverseDirectoryAndCopy(const fs::path &path) {
     return ret;
 }
 
-int DirectoryCopy::checkDirectory(const fs::path &path) {
+int DataManagement::checkDirectory(const fs::path &path) {
     if (!fs::exists(path)) {
         std::cout << "directory " << path.string() << " not exists, please check." << std::endl;
         return ERR_DIRECTORY_NOT_EXISTS;
@@ -114,7 +118,7 @@ int DirectoryCopy::checkDirectory(const fs::path &path) {
     return SUCCESS;
 }
 
-int DirectoryCopy::checkSpace(const fs::path &srcDir, const fs::path &dstDir) {
+int DataManagement::checkSpace(const fs::path &srcDir, const fs::path &dstDir) {
     struct statvfs stat;
 
     if (statvfs(dstDir.string().c_str(), &stat) != 0) {
@@ -142,7 +146,7 @@ int DirectoryCopy::checkSpace(const fs::path &srcDir, const fs::path &dstDir) {
     return SUCCESS;
 }
 
-uint64_t DirectoryCopy::getUsedSpace(const fs::path &dir, uint64_t &fileCount) {
+uint64_t DataManagement::getUsedSpace(const fs::path &dir, uint64_t &fileCount) {
     uintmax_t size = 0;
     for (auto &p: fs::recursive_directory_iterator(dir))
         if (p.is_regular_file()) {
@@ -152,7 +156,7 @@ uint64_t DirectoryCopy::getUsedSpace(const fs::path &dir, uint64_t &fileCount) {
     return size;
 }
 
-//uintmax_t DirectoryCopy::getUsedSpace(const fs::path &dir) {
+//uintmax_t DataManagement::getUsedSpace(const fs::path &dir) {
 //    uintmax_t size = 0;
 //    char command[1024];
 //    sprintf(command, "du -sb %s", dir.string().c_str());
@@ -165,7 +169,7 @@ uint64_t DirectoryCopy::getUsedSpace(const fs::path &dir, uint64_t &fileCount) {
 //    return size;
 //}
 
-int DirectoryCopy::deleteDirectory(const fs::path &deleteDir) {
+int DataManagement::deleteDirectory(const fs::path &deleteDir) {
     try {
         fs::remove_all(deleteDir);
         //std::cout << "Successfully removed directory: " << deleteDir << std::endl;
@@ -177,7 +181,7 @@ int DirectoryCopy::deleteDirectory(const fs::path &deleteDir) {
     return SUCCESS;
 }
 
-std::string DirectoryCopy::calculateMD5(const std::string &path) {
+std::string DataManagement::calculateMD5(const std::string &path) {
     std::ifstream file(path, std::ifstream::binary);
     MD5_CTX md5Context;
     MD5_Init(&md5Context);
@@ -198,7 +202,7 @@ std::string DirectoryCopy::calculateMD5(const std::string &path) {
     return ss.str();
 }
 
-int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &target) {
+int DataManagement::copySingleFile(const fs::path &source, const std::string &target) {
     fs::copy(source, target);
 
     // Check if the source and destination files have the same size
@@ -218,22 +222,22 @@ int DirectoryCopy::copySingleFile(const fs::path &source, const std::string &tar
     return SUCCESS;
 }
 
-void DirectoryCopy::updateCopyDetails(const fs::path &path) {
-    std::lock_guard<std::mutex> lock(_copyMutex);
+void DataManagement::updateCopyDetails(const fs::path &path) {
+    std::lock_guard <std::mutex> lock(_copyMutex);
     uint64_t copyFileCount = _copyDetails["current"]["copy_file_count"].get<uint64_t>();
     uint64_t copyFileSize = _copyDetails["current"]["copy_file_size"].get<uint64_t>();
     _copyDetails["current"]["copy_file_count"] = copyFileCount + 1;
     _copyDetails["current"]["copy_file_size"] = copyFileSize + fs::file_size(path);
 }
 
-void DirectoryCopy::printCopyDetails() {
-    std::lock_guard<std::mutex> lock(_copyMutex);
+void DataManagement::printCopyDetails() {
+    std::lock_guard <std::mutex> lock(_copyMutex);
     _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
     // TODO upload to platform
     std::cout << "copy progress, details: " << _copyDetails.dump(4) << std::endl;
 }
 
-int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
+int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     // auto srcDir = entry.path();
     if (_copyStopSignal) {
         return STOP_COPY_SIGNAL_RECEIVED;
@@ -374,7 +378,7 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
         if (_copyDetails["overall"].find("finished_dir_list") == _copyDetails["overall"].end()) {
             _copyDetails["overall"]["finished_dir_list"] = {srcDir.string()};
         } else {
-            std::vector<std::string> dirList = _copyDetails["overall"]["finished_dir_list"];
+            std::vector <std::string> dirList = _copyDetails["overall"]["finished_dir_list"];
             dirList.push_back(srcDir.string());
             _copyDetails["overall"]["finished_dir_list"] = dirList;
         }
@@ -390,7 +394,7 @@ int DirectoryCopy::copySingleDirectory(const fs::path &srcDir) {
     return ret;
 }
 
-bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
+bool DataManagement::hasPrefix(const fs::path &path, std::string &pattern) {
     std::string fileName = path.filename().string();
 
     std::regex prefixRegex(pattern);
@@ -411,7 +415,7 @@ bool DirectoryCopy::hasPrefix(const fs::path &path, std::string &pattern) {
     return false;
 }
 
-void DirectoryCopy::ticker(std::atomic<bool> &stop) {
+void DataManagement::ticker(std::atomic<bool> &stop) {
     std::cout << "start ticker" << std::endl;
     while (!stop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(_copySingleTickerInterval));
@@ -420,6 +424,14 @@ void DirectoryCopy::ticker(std::atomic<bool> &stop) {
     std::cout << "stop ticker" << std::endl;
 }
 
-void DirectoryCopy::stopCopy() {
+void DataManagement::stopCopy() {
     _copyStopSignal = true;
+}
+
+void DataManagement::setMaxCopyThread(int maxThreads) {
+    _maxThreads = maxThreads;
+}
+
+int DataManagement::getSingleDirList(std::vector <std::string> &dirList) {
+    return traverseDirectory(_srcDir, dirList);
 }

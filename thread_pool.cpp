@@ -11,7 +11,7 @@ ThreadPool::ThreadPool(int threads) {
             while (true) {
                 std::function<void()> task;
                 {
-                    std::unique_lock<std::mutex> lock(this->queue_mutex);
+                    std::unique_lock <std::mutex> lock(this->queue_mutex);
                     this->condition.wait(lock, [this] {
                         return this->stop || !this->tasks.empty();
                     });
@@ -28,7 +28,7 @@ ThreadPool::ThreadPool(int threads) {
 
 ThreadPool::~ThreadPool() {
     {
-        std::unique_lock<std::mutex> lock(queue_mutex);
+        std::unique_lock <std::mutex> lock(queue_mutex);
         stop = true;
     }
 

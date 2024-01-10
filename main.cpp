@@ -1,4 +1,4 @@
-#include "directory_copy.h"
+#include "data_management.h"
 #include "constants.h"
 
 int main() {
@@ -6,14 +6,24 @@ int main() {
     fs::path srcDir = "/home/ecopia/external_data/mapping";
     int maxThread = 2;
     int ret = SUCCESS;
-    DirectoryCopy dc(srcDir, dstDir, maxThread);
+    DataManagement dm(srcDir);
+    std::vector <std::string> dirList;
+    dm.getSingleDirList(dirList);
+    std::cout << "------------------ start print dir list ----------------" << std::endl;
+    for (const auto &dir: dirList) {
+        std::cout << dir << std::endl;
+    }
+    std::cout << "------------------ end print dir list -----------------" << std::endl;
 
-    std::thread t([&dc, &ret]() { ret = dc.copyDirectory(); });
+    dm.setMaxCopyThread(maxThread);
 
-    std::thread t1([&dc]() {
+    std::thread t([&dm, &ret, &dstDir]() { ret = dm.copyDirectory(dstDir); });
+
+    // test stop copy
+    std::thread t1([&dm]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         std::cout << "active copyStopSignal" << std::endl;
-        dc.stopCopy();
+        dm.stopCopy();
     });
 
     t.join();

@@ -1,5 +1,5 @@
-#ifndef DIRECTORYCOPY_CONSTANTS_H
-#define DIRECTORYCOPY_CONSTANTS_H
+#ifndef DATAMANAGEMENT_CONSTANTS_H
+#define DATAMANAGEMENT_CONSTANTS_H
 
 constexpr int SUCCESS = 0;
 constexpr int STOP_COPY_SIGNAL_RECEIVED = 1;
@@ -50,4 +50,4 @@ const std::string STEP_STATUS_SUCCESS = "success";
 const std::string STEP_STATUS_STOPPED = "stopped";
 const std::string STEP_STATUS_FAILED = "failed";
 
-#endif //DIRECTORYCOPY_CONSTANTS_H
+#endif //DATAMANAGEMENT_CONSTANTS_H
