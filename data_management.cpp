@@ -4,11 +4,87 @@
 #include <iostream>
 #include <cstdio>
 #include <nlohmann/json.hpp>
+#include <random>
 
 DataManagement::DataManagement(fs::path &srcDir)
         : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {}
 
 DataManagement::~DataManagement() {}
+
+std::string DataManagement::generateRandomString(int length) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis('a', 'z');
+
+    std::string randomString;
+    randomString.reserve(length);
+
+    for (int i = 0; i < length; ++i) {
+        randomString.push_back(static_cast<char>(dis(gen)));
+    }
+
+    return randomString;
+}
+
+std::string DataManagement::generateEventID(const std::string &abbr) {
+    auto now = std::chrono::system_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    std::string eventID = "dm-" + abbr + "-" + generateRandomString(6) + "-" + std::to_string(timestamp);
+    return eventID;
+}
+
+std::string DataManagement::generateDentryID(const std::string &path) {
+    unsigned char digest[MD5_DIGEST_LENGTH];
+
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, path.c_str(), path.size());
+    MD5_Final(digest, &ctx);
+
+    std::stringstream ss;
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int) digest[i];
+    }
+    return ss.str();
+}
+
+void DataManagement::initCopyDetails(const std::vector <std::string> &dirList) {
+    _copyDetails.clear();
+    _copyDetails["base_src_dir"] = _srcDir.string();
+    _copyDetails["base_dst_dir"] = _dstDir.string();
+    _copyDetails["dentry_list"] = dirList;
+    _copyDetails["dentry_count"] = dirList.size();
+
+    std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_START);
+    _copyDetails["primary_event_id"] = eventID;
+    _copyDetails["event_id"] = eventID;
+    _copyDetails["event_alias"] = STEP_TAG_COPY_DIRECTORY_START;
+    _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
+}
+
+void DataManagement::resetCopyDetails() {
+    _copyDetails.clear();
+}
+
+void DataManagement::initCurrentCopyDetails(const std::string &srcDir, const std::string &dstDir) {
+    _copyDetails["current_dentry_id"] = generateDentryID(srcDir);
+    _copyDetails["current_dentry_src"] = srcDir;
+    _copyDetails["current_dentry_dst"] = dstDir;
+    _copyDetails["current_dentry_total_file_count"] = 0ull;
+    _copyDetails["current_dentry_total_file_size"] = 0ull;
+    _copyDetails["current_dentry_copy_file_count"] = 0ull;
+    _copyDetails["current_dentry_copy_file_size"] = 0ull;
+}
+
+void DataManagement::resetCurrentCopyDetails() {
+    _copyDetails.erase("current_dentry_id");
+    _copyDetails.erase("current_dentry_src");
+    _copyDetails.erase("current_dentry_dst");
+    _copyDetails.erase("current_dentry_total_file_count");
+    _copyDetails.erase("current_dentry_total_file_size");
+    _copyDetails.erase("current_dentry_copy_file_count");
+    _copyDetails.erase("current_dentry_copy_file_size");
+}
 
 int DataManagement::copyDirectory(fs::path &dstDir) {
 
@@ -22,39 +98,32 @@ int DataManagement::copyDirectory(fs::path &dstDir) {
     }
 
     std::vector <std::string> dirList;
-    nlohmann::json overall;
-
     if (ret == SUCCESS) {
         ret = traverseDirectory(_srcDir, dirList);
     }
 
     if (ret == SUCCESS) {
-        _copyDetails.clear();
-        overall["src_dir"] = _srcDir.string();
-        overall["dst_dir"] = _dstDir.string();
-        overall["copy_dir_list"] = dirList;
-        overall["total_dir_count"] = dirList.size();
-        _copyDetails["overall"] = overall;
-        _copyDetails["step_tag"] = STEP_TAG_COPY_DIRECTORY_START;
-        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+        initCopyDetails(dirList);
         std::cout << _copyDetails.dump(4) << std::endl;
         // TODO upload to platform
 
         ret = traverseDirectoryAndCopy(_srcDir);
         if (ret == SUCCESS) {
-            _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
+            _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
         } else if (ret == STOP_COPY_SIGNAL_RECEIVED) {
-            _copyDetails["step_status"] = STEP_STATUS_STOPPED;
+            _copyDetails["event_status"] = STEP_STATUS_STOPPED;
             // reset ret
             ret = SUCCESS;
         } else {
-            _copyDetails["step_status"] = STEP_STATUS_FAILED;
-            _copyDetails["step_err_msg"] = getErrMsg(ret);
+            _copyDetails["event_status"] = STEP_STATUS_FAILED;
+            _copyDetails["event_errmesg"] = getErrMsg(ret);
         }
-        _copyDetails["step_tag"] = STEP_TAG_COPY_DIRECTORY_FINISHED;
+        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_FINISHED);
+        _copyDetails["event_alias"] = STEP_TAG_COPY_DIRECTORY_FINISHED;
         std::cout << _copyDetails.dump(4) << std::endl;
         // TODO upload to platform
         std::cout << "finish copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
+        resetCopyDetails();
     }
 
     return ret;
@@ -224,15 +293,14 @@ int DataManagement::copySingleFile(const fs::path &source, const std::string &ta
 
 void DataManagement::updateCopyDetails(const fs::path &path) {
     std::lock_guard <std::mutex> lock(_copyMutex);
-    uint64_t copyFileCount = _copyDetails["current"]["copy_file_count"].get<uint64_t>();
-    uint64_t copyFileSize = _copyDetails["current"]["copy_file_size"].get<uint64_t>();
-    _copyDetails["current"]["copy_file_count"] = copyFileCount + 1;
-    _copyDetails["current"]["copy_file_size"] = copyFileSize + fs::file_size(path);
+    uint64_t copyFileCount = _copyDetails["current_dentry_copy_file_count"].get<uint64_t>();
+    uint64_t copyFileSize = _copyDetails["current_dentry_copy_file_size"].get<uint64_t>();
+    _copyDetails["current_dentry_copy_file_count"] = copyFileCount + 1;
+    _copyDetails["current_dentry_copy_file_size"] = copyFileSize + fs::file_size(path);
 }
 
 void DataManagement::printCopyDetails() {
     std::lock_guard <std::mutex> lock(_copyMutex);
-    _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
     // TODO upload to platform
     std::cout << "copy progress, details: " << _copyDetails.dump(4) << std::endl;
 }
@@ -247,11 +315,7 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     auto relativeDirStr = srcDir.string();
     auto dstDir = _dstDir.string() + relativeDirStr.substr(_srcDir.string().length());
 
-    nlohmann::json current;
-    current["src_dir"] = srcDir.string();
-    current["dst_dir"] = dstDir;
-    current["copy_file_count"] = 0ull;
-    current["copy_file_size"] = 0ull;
+    initCurrentCopyDetails(srcDir.string(), dstDir);
 
     // TODO need upload to platform when single directory copy start (YYYY_MM_DD_xx_xx_xx)
     std::cout << "start copy single directory: src: [" << srcDir.string() << "], dst: [" << dstDir << "]" << std::endl;
@@ -290,8 +354,8 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
 
             uint64_t totalFileCount = 0, totalFileSize = 0;
             totalFileSize = getUsedSpace(srcDir, totalFileCount);
-            current["total_file_count"] = totalFileCount;
-            current["total_file_size"] = totalFileSize;
+            _copyDetails["current_dentry_total_file_count"] = totalFileCount;
+            _copyDetails["current_dentry_total_file_size"] = totalFileSize;
             //std::cout << "dst dir used size: " << usedSize << " bytes\n";
             //std::cout << "dst dir used size: " << usedSize / 1024.0 / 1024 / 1024 << " GB\n";
 
@@ -304,15 +368,17 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
-        _copyDetails["current"] = current;
-        _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_START;
-        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
-        // _copyDetails["overall"].erase("");
+        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_START);
+        _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_START;
+        _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
         // TODO upload to platform
         std::cout << "start copy, details: " << _copyDetails.dump(4) << std::endl;
         //std::thread t([this]() { this->ticker(); });
-        ThreadPool pool(_maxThreads);
 
+        // copy in progress
+        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_IN_PROGRESS);
+        _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
+        ThreadPool pool(_maxThreads);
         // print copy progress thread
         std::atomic<bool> copy_stop = false;
         std::thread t([this, &copy_stop]() { this->ticker(copy_stop); });
@@ -373,23 +439,18 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
-        _copyDetails["step_status"] = STEP_STATUS_SUCCESS;
-
-        if (_copyDetails["overall"].find("finished_dir_list") == _copyDetails["overall"].end()) {
-            _copyDetails["overall"]["finished_dir_list"] = {srcDir.string()};
-        } else {
-            std::vector <std::string> dirList = _copyDetails["overall"]["finished_dir_list"];
-            dirList.push_back(srcDir.string());
-            _copyDetails["overall"]["finished_dir_list"] = dirList;
-        }
+        _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
     } else {
-        _copyDetails["step_status"] = STEP_STATUS_FAILED;
-        _copyDetails["step_err_msg"] = getErrMsg(ret);
+        _copyDetails["event_status"] = STEP_STATUS_FAILED;
+        _copyDetails["event_errmesg"] = getErrMsg(ret);
     }
-    _copyDetails["step_tag"] = STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED;
+
+    _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_FINISHED);
+    _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED;
     // TODO upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
     std::cout << "copy single directory finished, details: " << _copyDetails.dump(4) << std::endl;
-    current.clear();
+
+    resetCurrentCopyDetails();
 
     return ret;
 }

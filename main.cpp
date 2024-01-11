@@ -7,6 +7,7 @@ int main() {
     int maxThread = 2;
     int ret = SUCCESS;
     DataManagement dm(srcDir);
+
     std::vector <std::string> dirList;
     dm.getSingleDirList(dirList);
     std::cout << "------------------ start print dir list ----------------" << std::endl;
@@ -21,7 +22,7 @@ int main() {
 
     // test stop copy
     std::thread t1([&dm]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::cout << "active copyStopSignal" << std::endl;
         dm.stopCopy();
     });

@@ -36,6 +36,8 @@ public:
 
     int getSingleDirList(std::vector <std::string> &);
 
+    std::string generateRandomString(int length);
+
 private:
     int traverseDirectory(const fs::path &, std::vector <std::string> &);
 
@@ -62,6 +64,18 @@ private:
     uint64_t getUsedSpace(const fs::path &, uint64_t &);
 
     void ticker(std::atomic<bool> &);
+
+    std::string generateEventID(const std::string &);
+
+    std::string generateDentryID(const std::string &);
+
+    void initCopyDetails(const std::vector <std::string> &);
+
+    void resetCopyDetails();
+
+    void initCurrentCopyDetails(const std::string &, const std::string &);
+
+    void resetCurrentCopyDetails();
 
 private:
     int _maxThreads;

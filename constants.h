@@ -46,6 +46,12 @@ const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_START = "copy_single_directory_
 const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS = "copy_single_directory_in_progress";
 const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED = "copy_single_directory_finished";
 
+const std::string EVENT_ID_ABBR_COPY_DIRECTORY_START = "cds";
+const std::string EVENT_ID_ABBR_COPY_DIRECTORY_FINISHED = "cdf";
+const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_START = "csds";
+const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_IN_PROGRESS = "csdip";
+const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_FINISHED = "csdf";
+
 const std::string STEP_STATUS_SUCCESS = "success";
 const std::string STEP_STATUS_STOPPED = "stopped";
 const std::string STEP_STATUS_FAILED = "failed";
