@@ -56,13 +56,17 @@ void DataManagement::initCopyDetails(const std::vector <std::string> &dirList) {
     _copyDetails["dentry_count"] = dirList.size();
 
     std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_START);
-    _copyDetails["primary_event_id"] = eventID;
+    // init _primaryEventID
+    _primaryEventID = eventID;
+
+    _copyDetails["primary_event_id"] = _primaryEventID;
     _copyDetails["event_id"] = eventID;
     _copyDetails["event_alias"] = STEP_TAG_COPY_DIRECTORY_START;
     _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
 }
 
 void DataManagement::resetCopyDetails() {
+    _primaryEventID = "";
     _copyDetails.clear();
 }
 

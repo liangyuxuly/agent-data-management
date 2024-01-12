@@ -86,6 +86,7 @@ private:
     nlohmann::json _copyDetails;
     std::atomic<bool> _copyStopSignal;
     int _copySingleTickerInterval;
+    std::string _primaryEventID;
 };
 
 #endif //DATAMANAGEMENT_DATA_MANAGEMENT_H
