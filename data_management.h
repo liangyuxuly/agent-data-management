@@ -36,6 +36,8 @@ public:
 
     int getSingleDirList(std::vector <std::string> &);
 
+    std::string getPrimaryEventID();
+
     std::string generateRandomString(int length);
 
 private:

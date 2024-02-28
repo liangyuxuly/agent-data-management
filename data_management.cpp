@@ -7,7 +7,10 @@
 #include <random>
 
 DataManagement::DataManagement(fs::path &srcDir)
-        : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {}
+        : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {
+    std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_INITED);
+    _primaryEventID = eventID;
+}
 
 DataManagement::~DataManagement() {}
 
@@ -56,13 +59,11 @@ void DataManagement::initCopyDetails(const std::vector <std::string> &dirList) {
     _copyDetails["dentry_count"] = dirList.size();
 
     std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_START);
-    // init _primaryEventID
-    _primaryEventID = eventID;
 
     _copyDetails["primary_event_id"] = _primaryEventID;
     _copyDetails["event_id"] = eventID;
-    _copyDetails["event_alias"] = STEP_TAG_COPY_DIRECTORY_START;
-    _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
+    _copyDetails["event_alias"] = EVENT_ALIAS_COPY_DIRECTORY_START;
+    _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
 }
 
 void DataManagement::resetCopyDetails() {
@@ -113,17 +114,17 @@ int DataManagement::copyDirectory(fs::path &dstDir) {
 
         ret = traverseDirectoryAndCopy(_srcDir);
         if (ret == SUCCESS) {
-            _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
+            _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
         } else if (ret == STOP_COPY_SIGNAL_RECEIVED) {
-            _copyDetails["event_status"] = STEP_STATUS_STOPPED;
+            _copyDetails["event_status"] = EVENT_STATUS_STOPPED;
             // reset ret
             ret = SUCCESS;
         } else {
-            _copyDetails["event_status"] = STEP_STATUS_FAILED;
+            _copyDetails["event_status"] = EVENT_STATUS_FAILED;
             _copyDetails["event_errmesg"] = getErrMsg(ret);
         }
         _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_FINISHED);
-        _copyDetails["event_alias"] = STEP_TAG_COPY_DIRECTORY_FINISHED;
+        _copyDetails["event_alias"] = EVENT_ALIAS_COPY_DIRECTORY_FINISHED;
         std::cout << _copyDetails.dump(4) << std::endl;
         // TODO upload to platform
         std::cout << "finish copy, src: [" << _srcDir.string() << "], dst: [" << _dstDir.string() << "]" << std::endl;
@@ -373,15 +374,15 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
 
     if (ret == SUCCESS) {
         _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_START);
-        _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_START;
-        _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
+        _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_START;
+        _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
         // TODO upload to platform
         std::cout << "start copy, details: " << _copyDetails.dump(4) << std::endl;
         //std::thread t([this]() { this->ticker(); });
 
         // copy in progress
         _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_IN_PROGRESS);
-        _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
+        _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
         ThreadPool pool(_maxThreads);
         // print copy progress thread
         std::atomic<bool> copy_stop = false;
@@ -443,14 +444,14 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
-        _copyDetails["event_status"] = STEP_STATUS_SUCCESS;
+        _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
     } else {
-        _copyDetails["event_status"] = STEP_STATUS_FAILED;
+        _copyDetails["event_status"] = EVENT_STATUS_FAILED;
         _copyDetails["event_errmesg"] = getErrMsg(ret);
     }
 
     _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_FINISHED);
-    _copyDetails["event_alias"] = STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED;
+    _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_FINISHED;
     // TODO upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
     std::cout << "copy single directory finished, details: " << _copyDetails.dump(4) << std::endl;
 
@@ -499,4 +500,8 @@ void DataManagement::setMaxCopyThread(int maxThreads) {
 
 int DataManagement::getSingleDirList(std::vector <std::string> &dirList) {
     return traverseDirectory(_srcDir, dirList);
+}
+
+std::string DataManagement::getPrimaryEventID() {
+    return _primaryEventID;
 }

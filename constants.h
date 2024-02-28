@@ -40,20 +40,22 @@ inline std::string getErrMsg(const int errCode) {
     }
 }
 
-const std::string STEP_TAG_COPY_DIRECTORY_START = "copy_directory_start";
-const std::string STEP_TAG_COPY_DIRECTORY_FINISHED = "copy_directory_finished";
-const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_START = "copy_single_directory_start";
-const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_IN_PROGRESS = "copy_single_directory_in_progress";
-const std::string STEP_TAG_COPY_SINGLE_DIRECTORY_FINISHED = "copy_single_directory_finished";
+const std::string EVENT_ALIAS_COPY_DIRECTORY_INITED = "copy_directory_inited";
+const std::string EVENT_ALIAS_COPY_DIRECTORY_START = "copy_directory_start";
+const std::string EVENT_ALIAS_COPY_DIRECTORY_FINISHED = "copy_directory_finished";
+const std::string EVENT_ALIAS_COPY_SINGLE_DIRECTORY_START = "copy_single_directory_start";
+const std::string EVENT_ALIAS_COPY_SINGLE_DIRECTORY_IN_PROGRESS = "copy_single_directory_in_progress";
+const std::string EVENT_ALIAS_COPY_SINGLE_DIRECTORY_FINISHED = "copy_single_directory_finished";
 
+const std::string EVENT_ID_ABBR_COPY_DIRECTORY_INITED = "cdi";
 const std::string EVENT_ID_ABBR_COPY_DIRECTORY_START = "cds";
 const std::string EVENT_ID_ABBR_COPY_DIRECTORY_FINISHED = "cdf";
 const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_START = "csds";
 const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_IN_PROGRESS = "csdip";
 const std::string EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_FINISHED = "csdf";
 
-const std::string STEP_STATUS_SUCCESS = "success";
-const std::string STEP_STATUS_STOPPED = "stopped";
-const std::string STEP_STATUS_FAILED = "failed";
+const std::string EVENT_STATUS_SUCCESS = "success";
+const std::string EVENT_STATUS_STOPPED = "stopped";
+const std::string EVENT_STATUS_FAILED = "failed";
 
 #endif //DATAMANAGEMENT_CONSTANTS_H

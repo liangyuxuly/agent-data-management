@@ -7,6 +7,8 @@ int main() {
     int maxThread = 2;
     int ret = SUCCESS;
     DataManagement dm(srcDir);
+    // TODO need to response copy_directory_start
+    auto primaryEventID = dm.getPrimaryEventID();
 
     std::vector <std::string> dirList;
     dm.getSingleDirList(dirList);
