@@ -16,7 +16,7 @@ constexpr int ERR_PARTIAL_COPY_FAILED = -9;
 inline std::string getErrMsg(const int errCode) {
     switch (errCode) {
         case SUCCESS:
-            return "SUCCESS";
+            return "success";
         case ERR_UNKNOWN:
             return "unknown error";
         case ERR_NO_ENOUGH_SPACE:

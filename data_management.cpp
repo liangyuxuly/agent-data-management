@@ -6,9 +6,13 @@
 #include <nlohmann/json.hpp>
 #include <random>
 
-DataManagement::DataManagement(fs::path &srcDir)
-        : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}") {
-    std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_INITED);
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
+DataManagement::DataManagement(fs::path &srcDir, int64_t userID, std::string &agentID)
+        : _srcDir(srcDir), _dirPattern("^\\d{4}_\\d{2}_\\d{2}"), _userID(userID), _agentID(agentID) {
+    std::string eventID = generateEventID();
     _primaryEventID = eventID;
 }
 
@@ -27,6 +31,13 @@ std::string DataManagement::generateRandomString(int length) {
     }
 
     return randomString;
+}
+
+std::string DataManagement::generateEventID() {
+    boost::uuids::random_generator generator;
+    boost::uuids::uuid uuid = generator();
+
+    return boost::uuids::to_string(uuid);
 }
 
 std::string DataManagement::generateEventID(const std::string &abbr) {
@@ -53,21 +64,24 @@ std::string DataManagement::generateDentryID(const std::string &path) {
 
 void DataManagement::initCopyDetails(const std::vector <std::string> &dirList) {
     _copyDetails.clear();
+    _copyDetails["primary_event_id"] = _primaryEventID;
+    _copyDetails["agent_id"] = _agentID;
+    _copyDetails["uid"] = _userID;
+
     _copyDetails["base_src_dir"] = _srcDir.string();
     _copyDetails["base_dst_dir"] = _dstDir.string();
     _copyDetails["dentry_list"] = dirList;
     _copyDetails["dentry_count"] = dirList.size();
 
-    std::string eventID = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_START);
-
-    _copyDetails["primary_event_id"] = _primaryEventID;
-    _copyDetails["event_id"] = eventID;
+    _copyDetails["event_id"] = generateEventID();
     _copyDetails["event_alias"] = EVENT_ALIAS_COPY_DIRECTORY_START;
     _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
 }
 
 void DataManagement::resetCopyDetails() {
     _primaryEventID = "";
+    _userID = 0;
+    _agentID = "";
     _copyDetails.clear();
 }
 
@@ -123,7 +137,7 @@ int DataManagement::copyDirectory(fs::path &dstDir) {
             _copyDetails["event_status"] = EVENT_STATUS_FAILED;
             _copyDetails["event_errmesg"] = getErrMsg(ret);
         }
-        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_DIRECTORY_FINISHED);
+        _copyDetails["event_id"] = generateEventID();
         _copyDetails["event_alias"] = EVENT_ALIAS_COPY_DIRECTORY_FINISHED;
         std::cout << _copyDetails.dump(4) << std::endl;
         // TODO upload to platform
@@ -373,7 +387,7 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
     }
 
     if (ret == SUCCESS) {
-        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_START);
+        _copyDetails["event_id"] = generateEventID();
         _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_START;
         _copyDetails["event_status"] = EVENT_STATUS_SUCCESS;
         // TODO upload to platform
@@ -381,7 +395,7 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
         //std::thread t([this]() { this->ticker(); });
 
         // copy in progress
-        _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_IN_PROGRESS);
+        _copyDetails["event_id"] = generateEventID();
         _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_IN_PROGRESS;
         ThreadPool pool(_maxThreads);
         // print copy progress thread
@@ -450,7 +464,7 @@ int DataManagement::copySingleDirectory(const fs::path &srcDir) {
         _copyDetails["event_errmesg"] = getErrMsg(ret);
     }
 
-    _copyDetails["event_id"] = generateEventID(EVENT_ID_ABBR_COPY_SINGLE_DIRECTORY_FINISHED);
+    _copyDetails["event_id"] = generateEventID();
     _copyDetails["event_alias"] = EVENT_ALIAS_COPY_SINGLE_DIRECTORY_FINISHED;
     // TODO upload to platform when single directory copy finished (YYYY_MM_DD_xx_xx_xx)
     std::cout << "copy single directory finished, details: " << _copyDetails.dump(4) << std::endl;

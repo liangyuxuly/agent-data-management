@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 
 class DataManagement {
 public:
-    DataManagement(fs::path &);
+    DataManagement(fs::path &, int64_t, std::string &);
 
     ~DataManagement();
 
@@ -69,6 +69,8 @@ private:
 
     std::string generateEventID(const std::string &);
 
+    std::string generateEventID();
+
     std::string generateDentryID(const std::string &);
 
     void initCopyDetails(const std::vector <std::string> &);
@@ -88,7 +90,10 @@ private:
     nlohmann::json _copyDetails;
     std::atomic<bool> _copyStopSignal;
     int _copySingleTickerInterval;
+
     std::string _primaryEventID;
+    int64_t _userID;
+    std::string _agentID;
 };
 
 #endif //DATAMANAGEMENT_DATA_MANAGEMENT_H

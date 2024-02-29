@@ -6,7 +6,9 @@ int main() {
     fs::path srcDir = "/home/ecopia/external_data/mapping";
     int maxThread = 2;
     int ret = SUCCESS;
-    DataManagement dm(srcDir);
+    int64_t userID = 108688500468;
+    std::string agentID = "vehicle-liangyuxu-test-35";
+    DataManagement dm(srcDir, userID, agentID);
     // TODO need to response copy_directory_start
     auto primaryEventID = dm.getPrimaryEventID();
 
